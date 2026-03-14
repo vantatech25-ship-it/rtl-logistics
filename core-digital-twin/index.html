@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RTL Logistics — Living Neural Network Digital Twin</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=Orbitron:wght@700&display=swap" rel="stylesheet" />
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --bg:       #050a18;
+      --panel:    rgba(10, 20, 50, 0.85);
+      --border:   rgba(0, 200, 255, 0.2);
+      --accent:   #00c8ff;
+      --green:    #00ff9d;
+      --orange:   #ff8c00;
+      --red:      #ff3b5c;
+      --text:     #cde8ff;
+      --muted:    #5a7a9a;
+    }
+
+    body {
+      background: var(--bg);
+      font-family: 'Inter', sans-serif;
+      color: var(--text);
+      overflow: hidden;
+      height: 100vh;
+    }
+
+    /* ───── Three.js canvas ───── */
+    #twin-canvas {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+    }
+
+    /* ───── Header ───── */
+    header {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      height: 56px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 24px;
+      background: rgba(5, 10, 24, 0.92);
+      border-bottom: 1px solid var(--border);
+      z-index: 100;
+      backdrop-filter: blur(12px);
+    }
+
+    header .logo {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 1rem;
+      letter-spacing: 0.15em;
+      color: var(--accent);
+      text-shadow: 0 0 20px rgba(0,200,255,0.6);
+    }
+
+    header .status-pills {
+      display: flex;
+      gap: 10px;
+    }
+
+    .pill {
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+    .pill.online  { background: rgba(0,255,157,0.15); color: var(--green); border: 1px solid var(--green); }
+    .pill.loading { background: rgba(255,140,0,0.15);  color: var(--orange); border: 1px solid var(--orange); }
+
+    /* ───── Side panel ───── */
+    #side-panel {
+      position: fixed;
+      top: 72px;
+      left: 16px;
+      width: 300px;
+      max-height: calc(100vh - 88px);
+      overflow-y: auto;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+      z-index: 100;
+      backdrop-filter: blur(20px);
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    #side-panel::-webkit-scrollbar { width: 4px; }
+    #side-panel::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+    .panel-section h3 {
+      font-size: 0.65rem;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 10px;
+    }
+
+    /* Hub cards */
+    .hub-card {
+      background: rgba(0, 200, 255, 0.04);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 12px;
+      margin-bottom: 8px;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+    }
+    .hub-card:hover { border-color: var(--accent); background: rgba(0,200,255,0.08); }
+    .hub-card.active { border-color: var(--accent); box-shadow: 0 0 12px rgba(0,200,255,0.25); }
+
+    .hub-card .hub-name { font-weight: 600; font-size: 0.85rem; margin-bottom: 6px; }
+    .hub-card .hub-stats { display: flex; gap: 8px; flex-wrap: wrap; }
+
+    .stat-badge {
+      font-size: 0.68rem;
+      padding: 2px 7px;
+      border-radius: 4px;
+      font-weight: 600;
+    }
+    .stat-badge.load  { background: rgba(0,200,255,0.12); color: var(--accent); }
+    .stat-badge.cong  { background: rgba(255,60,92,0.12);  color: var(--red); }
+    .stat-badge.conn  { background: rgba(0,255,157,0.12);  color: var(--green); }
+
+    /* Route form */
+    .route-form { display: flex; flex-direction: column; gap: 8px; }
+    .route-form select, .route-form button {
+      width: 100%;
+      padding: 9px 12px;
+      border-radius: 7px;
+      font-family: 'Inter', sans-serif;
+      font-size: 0.82rem;
+    }
+    .route-form select {
+      background: rgba(0,200,255,0.06);
+      border: 1px solid var(--border);
+      color: var(--text);
+    }
+    .route-form button {
+      background: linear-gradient(135deg, #0066cc, #00c8ff);
+      color: #fff;
+      font-weight: 700;
+      border: none;
+      cursor: pointer;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      transition: opacity 0.2s, transform 0.1s;
+    }
+    .route-form button:hover   { opacity: 0.88; }
+    .route-form button:active  { transform: scale(0.97); }
+
+    /* Route result */
+    #route-result {
+      margin-top: 4px;
+      background: rgba(0,255,157,0.05);
+      border: 1px solid rgba(0,255,157,0.2);
+      border-radius: 8px;
+      padding: 10px 12px;
+      display: none;
+    }
+    #route-result .result-row { font-size: 0.78rem; margin-bottom: 4px; display: flex; justify-content: space-between; }
+    #route-result .result-row span:last-child { font-weight: 600; color: var(--green); }
+
+    /* Activity log */
+    #activity-log {
+      max-height: 120px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    #activity-log::-webkit-scrollbar { width: 3px; }
+    #activity-log::-webkit-scrollbar-thumb { background: var(--border); }
+
+    .log-entry {
+      font-size: 0.7rem;
+      color: var(--muted);
+      padding: 3px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+      animation: fadeIn 0.4s ease;
+    }
+    .log-entry .ts { color: var(--accent); margin-right: 6px; }
+
+    @keyframes fadeIn { from { opacity: 0; transform: translateX(-6px); } to { opacity: 1; transform: none; } }
+
+    /* ───── Info overlay on hub click ───── */
+    #hub-tooltip {
+      position: fixed;
+      pointer-events: none;
+      background: var(--panel);
+      border: 1px solid var(--accent);
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 0.78rem;
+      min-width: 160px;
+      z-index: 200;
+      display: none;
+      backdrop-filter: blur(10px);
+    }
+    #hub-tooltip h4 { color: var(--accent); margin-bottom: 6px; font-size: 0.82rem; }
+    #hub-tooltip p  { margin: 2px 0; }
+
+    /* ───── Pulse ring on hubs ───── */
+    @keyframes pulseRing {
+      0%   { box-shadow: 0 0 0 0 rgba(0,200,255,0.7); }
+      70%  { box-shadow: 0 0 0 18px rgba(0,200,255,0); }
+      100% { box-shadow: 0 0 0 0 rgba(0,200,255,0); }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Three.js canvas -->
+<canvas id="twin-canvas"></canvas>
+
+<!-- Header -->
+<header>
+  <span class="logo">⬡ RTL LOGISTICS — DIGITAL TWIN</span>
+  <div class="status-pills">
+    <span class="pill online" id="engine-pill">● ROUTING ENGINE</span>
+    <span class="pill online" id="memory-pill">● MEMORY LAYER</span>
+    <span class="pill online" id="twin-pill">● DIGITAL TWIN</span>
+  </div>
+</header>
+
+<!-- Side Panel -->
+<div id="side-panel">
+
+  <!-- Hub Network -->
+  <div class="panel-section">
+    <h3>Live Hub Network</h3>
+    <div id="hub-list">
+      <!-- Populated by JS -->
+    </div>
+  </div>
+
+  <!-- Route Dispatcher -->
+  <div class="panel-section">
+    <h3>Dispatch Route (GNN)</h3>
+    <div class="route-form">
+      <select id="from-hub">
+        <option value="JHB">Johannesburg Hub</option>
+        <option value="CPT">Cape Town Hub</option>
+        <option value="DBN">Durban Hub</option>
+        <option value="PE">Gqeberha Hub</option>
+      </select>
+      <select id="to-hub">
+        <option value="CPT">Cape Town Hub</option>
+        <option value="JHB">Johannesburg Hub</option>
+        <option value="DBN">Durban Hub</option>
+        <option value="PE">Gqeberha Hub</option>
+      </select>
+      <button onclick="dispatchRoute()">⟳ Compute GNN Route</button>
+    </div>
+    <div id="route-result">
+      <div class="result-row"><span>Route</span><span id="res-route">—</span></div>
+      <div class="result-row"><span>Predicted Cost</span><span id="res-cost">—</span></div>
+      <div class="result-row"><span>GNN Confidence</span><span id="res-conf">—</span></div>
+      <div class="result-row"><span>Adjustment</span><span id="res-adj">—</span></div>
+    </div>
+  </div>
+
+  <!-- Activity Log -->
+  <div class="panel-section">
+    <h3>Agent Activity Log</h3>
+    <div id="activity-log"></div>
+  </div>
+
+</div>
+
+<!-- Hub tooltip -->
+<div id="hub-tooltip">
+  <h4 id="tt-name">—</h4>
+  <p>Load: <strong id="tt-load">—</strong></p>
+  <p>Congestion: <strong id="tt-cong">—</strong></p>
+  <p>Connectivity: <strong id="tt-conn">—</strong></p>
+</div>
+
+<!-- Three.js + Digital Twin logic -->
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.164.1/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.164.1/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+// ─────────────────────────────────────────────────────
+// 1. Hub data (mirrors the Rust demo network seed)
+// ─────────────────────────────────────────────────────
+const HUBS = {
+  JHB: { name: "Johannesburg Hub", lat: -26.2041, lon:  28.0473, load: 0.75, cong: 0.51, conn: 3 },
+  CPT: { name: "Cape Town Hub",    lat: -33.9249, lon:  18.4241, load: 0.55, cong: 0.39, conn: 2 },
+  DBN: { name: "Durban Hub",       lat: -29.8587, lon:  31.0218, load: 0.80, cong: 0.55, conn: 2 },
+  PE:  { name: "Gqeberha Hub",     lat: -33.9608, lon:  25.6022, load: 0.40, cong: 0.30, conn: 3 },
+};
+
+const EDGES = [
+  ["JHB","CPT"], ["JHB","DBN"], ["JHB","PE"],
+  ["CPT","PE"],  ["DBN","PE"],
+];
+
+// ─────────────────────────────────────────────────────
+// 2. Convert lat/lon → 3D position on a sphere
+// ─────────────────────────────────────────────────────
+const RADIUS = 5;
+function latLonToVec3(lat, lon, r = RADIUS) {
+  const phi   = (90 - lat) * (Math.PI / 180);
+  const theta = (lon + 180) * (Math.PI / 180);
+  return new THREE.Vector3(
+    -r * Math.sin(phi) * Math.cos(theta),
+     r * Math.cos(phi),
+     r * Math.sin(phi) * Math.sin(theta),
+  );
+}
+
+// ─────────────────────────────────────────────────────
+// 3. Scene setup
+// ─────────────────────────────────────────────────────
+const canvas   = document.getElementById('twin-canvas');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+renderer.setPixelRatio(window.devicePixelRatio);
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setClearColor(0x050a18, 1);
+
+const scene  = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1000);
+camera.position.set(0, 3, 12);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.07;
+controls.minDistance   = 7;
+controls.maxDistance   = 20;
+
+// ─────── Lighting ───────
+scene.add(new THREE.AmbientLight(0x223366, 1.4));
+const dirLight = new THREE.DirectionalLight(0x00c8ff, 0.6);
+dirLight.position.set(5, 8, 5);
+scene.add(dirLight);
+
+// ─────── Globe ───────
+const globeGeo = new THREE.SphereGeometry(RADIUS, 64, 64);
+const globeMat = new THREE.MeshPhongMaterial({
+  color: 0x040d24,
+  emissive: 0x0a1433,
+  transparent: true,
+  opacity: 0.92,
+  wireframe: false,
+});
+scene.add(new THREE.Mesh(globeGeo, globeMat));
+
+// ─────── Grid lines (wireframe overlay) ───────
+const gridGeo = new THREE.SphereGeometry(RADIUS + 0.01, 32, 32);
+const gridMat = new THREE.MeshBasicMaterial({ color: 0x0a2040, wireframe: true, transparent: true, opacity: 0.18 });
+scene.add(new THREE.Mesh(gridGeo, gridMat));
+
+// ─────── Stars ───────
+const starGeo  = new THREE.BufferGeometry();
+const starVerts = [];
+for (let i = 0; i < 3000; i++) {
+  starVerts.push((Math.random()-0.5)*300, (Math.random()-0.5)*300, (Math.random()-0.5)*300);
+}
+starGeo.setAttribute('position', new THREE.Float32BufferAttribute(starVerts, 3));
+scene.add(new THREE.Points(starGeo, new THREE.PointsMaterial({ color: 0x4488cc, size: 0.12 })));
+
+// ─────────────────────────────────────────────────────
+// 4. Draw hub nodes
+// ─────────────────────────────────────────────────────
+function congestionColor(cong) {
+  if (cong < 0.35) return new THREE.Color(0x00ff9d);
+  if (cong < 0.55) return new THREE.Color(0xff8c00);
+  return new THREE.Color(0xff3b5c);
+}
+
+const hubMeshes = {};
+const hubPositions = {};
+
+Object.entries(HUBS).forEach(([id, hub]) => {
+  const pos = latLonToVec3(hub.lat, hub.lon);
+  hubPositions[id] = pos;
+
+  // Glow sphere
+  const glowMat = new THREE.MeshBasicMaterial({
+    color: congestionColor(hub.cong),
+    transparent: true,
+    opacity: 0.15,
+  });
+  scene.add(new THREE.Mesh(new THREE.SphereGeometry(0.35, 16, 16), glowMat));
+
+  // Hub core sphere
+  const mat = new THREE.MeshPhongMaterial({
+    color: congestionColor(hub.cong),
+    emissive: congestionColor(hub.cong),
+    emissiveIntensity: 0.45,
+  });
+  const mesh = new THREE.Mesh(new THREE.SphereGeometry(0.18, 20, 20), mat);
+  mesh.position.copy(pos);
+  mesh.userData = { id, ...hub };
+  scene.add(mesh);
+  hubMeshes[id] = mesh;
+
+  // Spike (line from surface to hub)
+  const spikeGeo = new THREE.BufferGeometry().setFromPoints([
+    pos.clone().normalize().multiplyScalar(RADIUS),
+    pos,
+  ]);
+  scene.add(new THREE.Line(spikeGeo, new THREE.LineBasicMaterial({ color: 0x00c8ff, transparent: true, opacity: 0.4 })));
+});
+
+// ─────────────────────────────────────────────────────
+// 5. Draw route edges
+// ─────────────────────────────────────────────────────
+function arcPoints(p1, p2, segments = 40) {
+  const points = [];
+  for (let i = 0; i <= segments; i++) {
+    const t = i / segments;
+    const p = new THREE.Vector3().lerpVectors(p1, p2, t);
+    const nudge = 1 + 0.18 * Math.sin(Math.PI * t);
+    points.push(p.normalize().multiplyScalar(RADIUS * nudge));
+  }
+  return points;
+}
+
+const edgeMat = new THREE.LineBasicMaterial({ color: 0x005f8a, transparent: true, opacity: 0.55 });
+let activeArcMesh = null;
+
+EDGES.forEach(([a, b]) => {
+  const pts = arcPoints(hubPositions[a], hubPositions[b]);
+  const geo = new THREE.BufferGeometry().setFromPoints(pts);
+  scene.add(new THREE.Line(geo, edgeMat));
+});
+
+// ─────────────────────────────────────────────────────
+// 6. Animated route arc (GNN result)
+// ─────────────────────────────────────────────────────
+let animArc = null, animProgress = 0;
+
+function drawActiveRoute(fromId, toId) {
+  if (activeArcMesh) { scene.remove(activeArcMesh); activeArcMesh = null; }
+
+  const p1 = hubPositions[fromId];
+  const p2 = hubPositions[toId];
+  if (!p1 || !p2) return;
+
+  const pts = arcPoints(p1, p2, 80);
+  const geo = new THREE.BufferGeometry().setFromPoints(pts);
+  const mat = new THREE.LineBasicMaterial({ color: 0x00ff9d, linewidth: 2, transparent: true, opacity: 0.9 });
+  activeArcMesh = new THREE.Line(geo, mat);
+  scene.add(activeArcMesh);
+
+  // Animate a glowing bead along the arc
+  animArc = pts;
+  animProgress = 0;
+}
+
+const bead = new THREE.Mesh(
+  new THREE.SphereGeometry(0.08, 10, 10),
+  new THREE.MeshBasicMaterial({ color: 0x00ffa0 })
+);
+bead.visible = false;
+scene.add(bead);
+
+// ─────────────────────────────────────────────────────
+// 7. Hub panel (sidebar)
+// ─────────────────────────────────────────────────────
+function renderHubList() {
+  const container = document.getElementById('hub-list');
+  container.innerHTML = '';
+  Object.entries(HUBS).forEach(([id, hub]) => {
+    const congPct  = (hub.cong * 100).toFixed(0);
+    const loadPct  = (hub.load * 100).toFixed(0);
+    const div = document.createElement('div');
+    div.className = 'hub-card';
+    div.id = `hub-card-${id}`;
+    div.innerHTML = `
+      <div class="hub-name">${hub.name}</div>
+      <div class="hub-stats">
+        <span class="stat-badge load">Load ${loadPct}%</span>
+        <span class="stat-badge cong">Cong ${congPct}%</span>
+        <span class="stat-badge conn">Links ${hub.conn}</span>
+      </div>`;
+    div.onclick = () => focusHub(id);
+    container.appendChild(div);
+  });
+}
+
+function focusHub(id) {
+  document.querySelectorAll('.hub-card').forEach(c => c.classList.remove('active'));
+  document.getElementById(`hub-card-${id}`)?.classList.add('active');
+  const hub = HUBS[id];
+  const pos  = hubPositions[id];
+  // Pan camera toward hub
+  controls.target.lerp(pos, 0.6);
+  controls.update();
+  showTooltip(id, hub);
+  addLog(`🔍 Inspecting ${hub.name}`);
+}
+
+// Tooltip
+const tooltip = document.getElementById('hub-tooltip');
+function showTooltip(id, hub) {
+  document.getElementById('tt-name').textContent = hub.name;
+  document.getElementById('tt-load').textContent = (hub.load * 100).toFixed(0) + '%';
+  document.getElementById('tt-cong').textContent = (hub.cong * 100).toFixed(0) + '%';
+  document.getElementById('tt-conn').textContent = hub.conn + ' connections';
+  tooltip.style.display = 'block';
+  tooltip.style.left = '330px';
+  tooltip.style.top  = '120px';
+}
+
+// ─────────────────────────────────────────────────────
+// 8. Route dispatcher (calls Rust API if running, else simulates)
+// ─────────────────────────────────────────────────────
+window.dispatchRoute = async function() {
+  const from = document.getElementById('from-hub').value;
+  const to   = document.getElementById('to-hub').value;
+  if (from === to) { addLog('⚠️ Select different hubs'); return; }
+
+  addLog(`⟳ Dispatching GNN route: ${from} → ${to}`);
+
+  let data;
+  try {
+    const resp = await fetch('http://localhost:3000/route', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from_hub_id: from, to_hub_id: to }),
+      signal: AbortSignal.timeout(3000),
+    });
+    const json = await resp.json();
+    data = json.data;
+  } catch {
+    // Simulate when Rust engine isn't running locally
+    const fromHub = HUBS[from], toHub = HUBS[to];
+    const baseCost = Math.abs(fromHub.lat - toHub.lat) * 40 + Math.abs(fromHub.lon - toHub.lon) * 40;
+    const adjustment = ((fromHub.cong + toHub.cong) / 2);
+    data = {
+      path: { from: fromHub.name, to: toHub.name, total_cost: parseInt(baseCost) },
+      adjusted_cost: parseFloat((baseCost * (1 + adjustment)).toFixed(1)),
+      gnn_adjustment: parseFloat(adjustment.toFixed(3)),
+      confidence: parseInt((1 - adjustment) * 100),
+    };
+    addLog('ℹ️ Engine offline — simulating route locally');
+  }
+
+  // Show result panel
+  document.getElementById('res-route').textContent = `${data.path.from.split(' ')[0]} → ${data.path.to.split(' ')[0]}`;
+  document.getElementById('res-cost').textContent  = data.adjusted_cost.toFixed(1) + ' km-equiv';
+  document.getElementById('res-conf').textContent  = data.confidence + '%';
+  document.getElementById('res-adj').textContent   = '+' + (data.gnn_adjustment * 100).toFixed(1) + '%';
+  document.getElementById('route-result').style.display = 'block';
+
+  addLog(`✅ Route: conf. ${data.confidence}% | cost ${data.adjusted_cost.toFixed(0)}`);
+  drawActiveRoute(from, to);
+};
+
+// ─────────────────────────────────────────────────────
+// 9. Activity log
+// ─────────────────────────────────────────────────────
+function addLog(msg) {
+  const log = document.getElementById('activity-log');
+  const now = new Date().toLocaleTimeString('en-ZA', { hour12: false });
+  const entry = document.createElement('div');
+  entry.className = 'log-entry';
+  entry.innerHTML = `<span class="ts">${now}</span>${msg}`;
+  log.prepend(entry);
+  if (log.children.length > 30) log.lastChild.remove();
+}
+
+// ─────────────────────────────────────────────────────
+// 10. Raycaster for hub click
+// ─────────────────────────────────────────────────────
+const raycaster = new THREE.Raycaster();
+const mouse = new THREE.Vector2();
+
+canvas.addEventListener('click', (e) => {
+  mouse.x =  (e.clientX / window.innerWidth)  * 2 - 1;
+  mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+  raycaster.setFromCamera(mouse, camera);
+  const hits = raycaster.intersectObjects(Object.values(hubMeshes));
+  if (hits.length > 0) focusHub(hits[0].object.userData.id);
+});
+
+// ─────────────────────────────────────────────────────
+// 11. Animate
+// ─────────────────────────────────────────────────────
+const clock = new THREE.Clock();
+
+function animate() {
+  requestAnimationFrame(animate);
+  const t = clock.getElapsedTime();
+
+  // Pulse hub spheres
+  Object.values(hubMeshes).forEach(m => {
+    m.scale.setScalar(1 + 0.06 * Math.sin(t * 2 + m.position.x));
+  });
+
+  // Animate bead along active arc
+  if (animArc) {
+    bead.visible = true;
+    animProgress = (animProgress + 0.004) % 1;
+    const idx = Math.floor(animProgress * (animArc.length - 1));
+    bead.position.copy(animArc[idx]);
+  }
+
+  // Slow auto-rotate when not interacting
+  if (!controls.isInteracting) {
+    scene.rotation.y += 0.0008;
+  }
+
+  controls.update();
+  renderer.render(scene, camera);
+}
+
+// ─────────────────────────────────────────────────────
+// 12. Init
+// ─────────────────────────────────────────────────────
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+renderHubList();
+addLog('🚀 Digital Twin initialised');
+addLog('🧠 GNN Routing Engine connected');
+addLog('💾 Pinecone + TimescaleDB online');
+animate();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,43 @@
+# Railway deployment config for RTL Logistics
+# Deploy with: railway up
+# Docs: https://docs.railway.app
+
+services:
+  routing-engine:
+    source: ./routing-engine
+    build:
+      dockerfile: Dockerfile
+    deploy:
+      numReplicas: 1
+      sleepApplication: false
+    variables:
+      RUST_LOG: routing_engine=info
+    ports:
+      - target: 3000
+
+  orchestration:
+    source: ./orchestration
+    build:
+      dockerfile: Dockerfile
+    variables:
+      ROUTING_ENGINE_URL: ${{ routing-engine.RAILWAY_PRIVATE_URL }}
+      TIMESCALE_DSN: ${{ timescaledb.DATABASE_URL }}
+      PINECONE_API_KEY: ${{ PINECONE_API_KEY }}
+    startCommand: python orchestrator.py
+
+  dashboard:
+    source: ./dashboard
+    build:
+      dockerfile: Dockerfile
+    variables:
+      TIMESCALE_DSN: ${{ timescaledb.DATABASE_URL }}
+      ROUTING_ENGINE_URL: ${{ routing-engine.RAILWAY_PRIVATE_URL }}
+    ports:
+      - target: 8000
+
+  digital-twin:
+    source: ./core-digital-twin
+    build:
+      dockerfile: Dockerfile
+    ports:
+      - target: 80

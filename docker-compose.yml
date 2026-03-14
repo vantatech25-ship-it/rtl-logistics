@@ -1,0 +1,100 @@
+version: "3.9"
+
+services:
+
+  # ─── Rust GNN Routing Engine ───────────────────────────────────────────────
+  routing-engine:
+    build:
+      context: ./routing-engine
+      dockerfile: Dockerfile
+    container_name: rtt_routing_engine
+    ports:
+      - "3000:3000"
+    environment:
+      RUST_LOG: routing_engine=info
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+    networks:
+      - rtt-net
+
+  # ─── TimescaleDB (PostgreSQL + time-series extension) ──────────────────────
+  timescaledb:
+    image: timescale/timescaledb:latest-pg16
+    container_name: rtt_timescaledb
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: rtt_user
+      POSTGRES_PASSWORD: rtt_pass
+      POSTGRES_DB: rtt_logistics
+    volumes:
+      - timescale_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rtt_user -d rtt_logistics"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - rtt-net
+
+  # ─── LangGraph Orchestrator ────────────────────────────────────────────────
+  orchestration:
+    build:
+      context: ./orchestration
+      dockerfile: Dockerfile
+    container_name: rtt_orchestrator
+    depends_on:
+      routing-engine:
+        condition: service_healthy
+      timescaledb:
+        condition: service_healthy
+    environment:
+      ROUTING_ENGINE_URL: http://routing-engine:3000
+      TIMESCALE_DSN: postgresql://rtt_user:rtt_pass@timescaledb:5432/rtt_logistics
+      PINECONE_API_KEY: ${PINECONE_API_KEY}
+      PINECONE_INDEX: rtt-logistics-hubs
+    restart: unless-stopped
+    networks:
+      - rtt-net
+
+  # ─── Digital Twin (Three.js served via Nginx) ──────────────────────────────
+  digital-twin:
+    build:
+      context: ./core-digital-twin
+      dockerfile: Dockerfile
+    container_name: rtt_digital_twin
+    ports:
+      - "8080:80"
+    restart: unless-stopped
+    networks:
+      - rtt-net
+
+  # ─── KPI Metrics Dashboard (Python FastAPI) ────────────────────────────────
+  dashboard:
+    build:
+      context: ./dashboard
+      dockerfile: Dockerfile
+    container_name: rtt_dashboard
+    ports:
+      - "8000:8000"
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+    environment:
+      TIMESCALE_DSN: postgresql://rtt_user:rtt_pass@timescaledb:5432/rtt_logistics
+      ROUTING_ENGINE_URL: http://routing-engine:3000
+    restart: unless-stopped
+    networks:
+      - rtt-net
+
+volumes:
+  timescale_data:
+
+networks:
+  rtt-net:
+    driver: bridge

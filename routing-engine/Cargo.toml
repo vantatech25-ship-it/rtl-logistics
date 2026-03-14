@@ -1,0 +1,38 @@
+[package]
+name = "routing-engine"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "routing-engine"
+path = "src/main.rs"
+
+[dependencies]
+# Async runtime
+tokio = { version = "1.0", features = ["full"] }
+
+# HTTP API
+axum = { version = "0.7", features = ["json"] }
+tower = "0.4"
+tower-http = { version = "0.5", features = ["cors", "trace"] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Graph algorithms (hub/vehicle network)
+petgraph = "0.6.5"
+
+# UUID for route IDs
+uuid = { version = "1.0", features = ["v4"] }
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Error handling
+anyhow = "1.0"
+thiserror = "1.0"
+
+[dev-dependencies]
+tokio = { version = "1.0", features = ["full"] }

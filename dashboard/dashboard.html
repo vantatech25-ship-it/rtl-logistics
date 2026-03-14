@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RTL Logistics — KPI Command Centre</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Orbitron:wght@700&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #04080f;
+      --surface:   #080e1c;
+      --card:      rgba(10, 18, 38, 0.92);
+      --border:    rgba(0, 200, 255, 0.15);
+      --accent:    #00c8ff;
+      --green:     #00ff9d;
+      --orange:    #ffab00;
+      --red:       #ff3b5c;
+      --purple:    #b36aff;
+      --text:      #d8eeff;
+      --muted:     #4a6a8a;
+      --font:      'Inter', sans-serif;
+    }
+
+    html, body { height: 100%; font-family: var(--font); background: var(--bg); color: var(--text); }
+
+    /* ── Layout ─────────────────────────────────── */
+    .app { display: flex; flex-direction: column; min-height: 100vh; }
+
+    header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 28px; height: 58px;
+      background: rgba(4,8,15,0.94);
+      border-bottom: 1px solid var(--border);
+      position: sticky; top: 0; z-index: 100;
+      backdrop-filter: blur(16px);
+    }
+    .logo { font-family: 'Orbitron', sans-serif; font-size: 0.9rem; letter-spacing: .15em; color: var(--accent); text-shadow: 0 0 18px rgba(0,200,255,.5); }
+    .header-right { display: flex; align-items: center; gap: 14px; }
+    .badge { font-size: .68rem; font-weight: 600; padding: 3px 10px; border-radius: 12px; text-transform: uppercase; letter-spacing: .06em; }
+    .badge.live   { background: rgba(0,255,157,.12); color: var(--green); border: 1px solid rgba(0,255,157,.35); }
+    .badge.synced { background: rgba(0,200,255,.10); color: var(--accent); border: 1px solid rgba(0,200,255,.3); }
+    #last-updated { font-size: .68rem; color: var(--muted); }
+
+    main { flex: 1; padding: 24px 28px; display: flex; flex-direction: column; gap: 20px; }
+
+    /* ── KPI stat cards ─────────────────────────── */
+    .kpi-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 14px; }
+
+    .kpi-card {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 12px; padding: 18px 20px;
+      position: relative; overflow: hidden;
+      transition: border-color .2s, transform .15s;
+    }
+    .kpi-card:hover { border-color: var(--accent); transform: translateY(-2px); }
+    .kpi-card::before {
+      content: ''; position: absolute; inset: 0;
+      background: linear-gradient(135deg, rgba(0,200,255,.04), transparent);
+    }
+    .kpi-label { font-size: .65rem; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
+    .kpi-value { font-size: 2rem; font-weight: 700; line-height: 1; }
+    .kpi-sub   { font-size: .72rem; color: var(--muted); margin-top: 6px; }
+
+    .kpi-card.accent-green .kpi-value { color: var(--green); }
+    .kpi-card.accent-blue  .kpi-value { color: var(--accent); }
+    .kpi-card.accent-orange .kpi-value { color: var(--orange); }
+    .kpi-card.accent-red   .kpi-value { color: var(--red); }
+    .kpi-card.accent-purple .kpi-value { color: var(--purple); }
+
+    /* ── Charts row ─────────────────────────────── */
+    .charts-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 16px; }
+
+    .chart-card {
+      background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px;
+    }
+    .chart-card h3 { font-size: .72rem; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin-bottom: 16px; }
+
+    canvas { max-height: 220px; }
+
+    /* ── Hub table ──────────────────────────────── */
+    .table-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; overflow-x: auto; }
+    .table-card h3 { font-size: .72rem; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin-bottom: 14px; }
+
+    table { width: 100%; border-collapse: collapse; font-size: .82rem; }
+    th { text-align: left; font-size: .65rem; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); padding: 8px 12px; border-bottom: 1px solid var(--border); }
+    td { padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,.04); }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: rgba(0,200,255,.03); }
+
+    .cong-bar-wrap { width: 80px; background: rgba(255,255,255,.07); border-radius: 4px; height: 6px; overflow: hidden; }
+    .cong-bar { height: 100%; border-radius: 4px; }
+
+    /* ── Routes table ───────────────────────────── */
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+    .status-pill { font-size: .65rem; font-weight: 700; padding: 2px 9px; border-radius: 10px; text-transform: uppercase; }
+    .status-pill.done { background: rgba(0,255,157,.12); color: var(--green); }
+    .status-pill.pend { background: rgba(255,171,0,.12); color: var(--orange); }
+
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+    .live-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--green); margin-right: 5px; animation: pulse 2s infinite; }
+  </style>
+</head>
+<body>
+<div class="app">
+
+  <header>
+    <span class="logo">◈ RTL LOGISTICS — KPI COMMAND CENTRE</span>
+    <div class="header-right">
+      <span class="badge live"><span class="live-dot"></span>Live</span>
+      <span class="badge synced" id="engine-status">● Engine Online</span>
+      <span id="last-updated">Syncing…</span>
+    </div>
+  </header>
+
+  <main>
+
+    <!-- KPI Cards -->
+    <div class="kpi-grid" id="kpi-grid">
+      <div class="kpi-card accent-blue">
+        <div class="kpi-label">Active Hubs</div>
+        <div class="kpi-value" id="kpi-hubs">—</div>
+        <div class="kpi-sub">Nodes in network</div>
+      </div>
+      <div class="kpi-card accent-red">
+        <div class="kpi-label">Avg Congestion</div>
+        <div class="kpi-value" id="kpi-cong">—</div>
+        <div class="kpi-sub">GNN score (0–1)</div>
+      </div>
+      <div class="kpi-card accent-orange">
+        <div class="kpi-label">Avg Load</div>
+        <div class="kpi-value" id="kpi-load">—</div>
+        <div class="kpi-sub">Hub utilisation</div>
+      </div>
+      <div class="kpi-card accent-green">
+        <div class="kpi-label">Routes (24h)</div>
+        <div class="kpi-value" id="kpi-routes">—</div>
+        <div class="kpi-sub" id="kpi-routes-sub">dispatched</div>
+      </div>
+      <div class="kpi-card accent-purple">
+        <div class="kpi-label">GNN Confidence</div>
+        <div class="kpi-value" id="kpi-conf">—</div>
+        <div class="kpi-sub">Avg route score</div>
+      </div>
+      <div class="kpi-card accent-blue">
+        <div class="kpi-label">Live Vehicles</div>
+        <div class="kpi-value" id="kpi-fleet">—</div>
+        <div class="kpi-sub">Pinging in ≤10 min</div>
+      </div>
+    </div>
+
+    <!-- Charts -->
+    <div class="charts-grid">
+      <div class="chart-card">
+        <h3>Hub Congestion Trend — JHB (last 12h)</h3>
+        <canvas id="trend-chart"></canvas>
+      </div>
+      <div class="chart-card">
+        <h3>Hub Congestion Breakdown</h3>
+        <canvas id="cong-chart"></canvas>
+      </div>
+    </div>
+
+    <!-- Hub + Routes tables -->
+    <div class="two-col">
+
+      <!-- Hub scores table -->
+      <div class="table-card">
+        <h3>Hub GNN Scores</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Hub</th><th>Load</th><th>Congestion</th><th>Links</th>
+            </tr>
+          </thead>
+          <tbody id="hub-table-body">
+            <tr><td colspan="4" style="color:var(--muted)">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Recent routes table -->
+      <div class="table-card">
+        <h3>Recent Route Dispatches</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Route</th><th>Predicted</th><th>Actual</th><th>Conf.</th><th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="routes-table-body">
+            <tr><td colspan="5" style="color:var(--muted)">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+    </div>
+  </main>
+</div>
+
+<script>
+const API = window.location.hostname === 'localhost'? 'http://localhost:8000' : '';
+
+// ── Chart setup ─────────────────────────────────────────────────────────────
+Chart.defaults.color = '#4a6a8a';
+Chart.defaults.borderColor = 'rgba(0,200,255,0.08)';
+
+// Trend line chart
+const trendCtx = document.getElementById('trend-chart').getContext('2d');
+const trendChart = new Chart(trendCtx, {
+  type: 'line',
+  data: {
+    labels: [],
+    datasets: [
+      { label: 'Congestion', data: [], borderColor: '#ff3b5c', backgroundColor: 'rgba(255,59,92,0.1)', tension: 0.4, fill: true, pointRadius: 2 },
+      { label: 'Load',       data: [], borderColor: '#00c8ff', backgroundColor: 'rgba(0,200,255,0.07)', tension: 0.4, fill: true, pointRadius: 2 },
+    ]
+  },
+  options: { responsive: true, plugins: { legend: { labels: { font: { size: 11 } } } }, scales: { y: { min: 0, max: 1 } } }
+});
+
+// Doughnut chart
+const congCtx = document.getElementById('cong-chart').getContext('2d');
+const congChart = new Chart(congCtx, {
+  type: 'doughnut',
+  data: {
+    labels: [],
+    datasets: [{ data: [], backgroundColor: ['#00ff9d','#00c8ff','#ffab00','#ff3b5c'], borderWidth: 0 }]
+  },
+  options: { responsive: true, plugins: { legend: { position: 'bottom', labels: { font: { size: 11 }, padding: 12 } } }, cutout: '65%' }
+});
+
+// ── Congestion bar color ─────────────────────────────────────────────────────
+function congColor(v) {
+  if (v < 0.35) return '#00ff9d';
+  if (v < 0.55) return '#ffab00';
+  return '#ff3b5c';
+}
+
+// ── Fetch & render KPIs ─────────────────────────────────────────────────────
+async function fetchKPIs() {
+  // Simulate if backend not running
+  let d;
+  try {
+    const r = await fetch(`${API}/api/kpis`, { signal: AbortSignal.timeout(3000) });
+    d = await r.json();
+  } catch {
+    d = { hub_count:4, avg_congestion:0.44, avg_load:0.625, recent_readings:12,
+          routes_24h:38, routes_completed:34, avg_cost_delta:-12.3, avg_confidence:72.4, live_vehicles:6 };
+  }
+  document.getElementById('kpi-hubs').textContent   = d.hub_count;
+  document.getElementById('kpi-cong').textContent   = (d.avg_congestion * 100).toFixed(0) + '%';
+  document.getElementById('kpi-load').textContent   = (d.avg_load * 100).toFixed(0) + '%';
+  document.getElementById('kpi-routes').textContent = d.routes_24h;
+  document.getElementById('kpi-routes-sub').textContent = `${d.routes_completed} completed`;
+  document.getElementById('kpi-conf').textContent   = d.avg_confidence.toFixed(0) + '%';
+  document.getElementById('kpi-fleet').textContent  = d.live_vehicles;
+  document.getElementById('last-updated').textContent = 'Updated ' + new Date().toLocaleTimeString('en-ZA', { hour12: false });
+}
+
+// ── Fetch & render Hub scores ────────────────────────────────────────────────
+async function fetchHubs() {
+  let hubs;
+  try {
+    const r = await fetch(`${API}/api/hubs`, { signal: AbortSignal.timeout(3000) });
+    const j = await r.json();
+    hubs = j.success ? j.data : null;
+  } catch { hubs = null; }
+
+  // Fallback demo data
+  if (!hubs) {
+    hubs = [
+      { hub_id:'JHB', load_factor:0.75, congestion_score:0.51, connectivity:3 },
+      { hub_id:'CPT', load_factor:0.55, congestion_score:0.39, connectivity:2 },
+      { hub_id:'DBN', load_factor:0.80, congestion_score:0.55, connectivity:2 },
+      { hub_id:'PE',  load_factor:0.40, congestion_score:0.30, connectivity:3 },
+    ];
+  }
+
+  const tbody = document.getElementById('hub-table-body');
+  tbody.innerHTML = hubs.map(h => `
+    <tr>
+      <td><strong>${h.hub_id}</strong></td>
+      <td>${(h.load_factor*100).toFixed(0)}%</td>
+      <td>
+        <div style="display:flex;align-items:center;gap:8px">
+          <div class="cong-bar-wrap"><div class="cong-bar" style="width:${h.congestion_score*100}%;background:${congColor(h.congestion_score)}"></div></div>
+          <span style="font-size:.75rem;color:${congColor(h.congestion_score)}">${(h.congestion_score*100).toFixed(0)}%</span>
+        </div>
+      </td>
+      <td>${h.connectivity}</td>
+    </tr>`).join('');
+
+  // Update doughnut
+  congChart.data.labels   = hubs.map(h => h.hub_id);
+  congChart.data.datasets[0].data = hubs.map(h => +(h.congestion_score).toFixed(3));
+  congChart.update();
+}
+
+// ── Fetch & render trend ─────────────────────────────────────────────────────
+async function fetchTrend() {
+  let data;
+  try {
+    const r = await fetch(`${API}/api/congestion-trend?hub_id=JHB`, { signal: AbortSignal.timeout(3000) });
+    data = await r.json();
+  } catch {
+    // Synthetic trend
+    data = Array.from({ length: 24 }, (_, i) => ({
+      time: new Date(Date.now() - (23-i)*30*60000).toISOString(),
+      congestion: 0.3 + Math.random() * 0.4,
+      load: 0.5 + Math.random() * 0.3,
+    }));
+  }
+  trendChart.data.labels = data.map(d => new Date(d.time).toLocaleTimeString('en-ZA', { hour:'2-digit', minute:'2-digit', hour12:false }));
+  trendChart.data.datasets[0].data = data.map(d => +d.congestion.toFixed(3));
+  trendChart.data.datasets[1].data = data.map(d => +d.load.toFixed(3));
+  trendChart.update();
+}
+
+// ── Fetch & render routes ────────────────────────────────────────────────────
+async function fetchRoutes() {
+  let routes;
+  try {
+    const r = await fetch(`${API}/api/routes/recent`, { signal: AbortSignal.timeout(3000) });
+    routes = await r.json();
+  } catch {
+    routes = [
+      { from_hub_id:'JHB', to_hub_id:'CPT', predicted_cost:2293, actual_cost:2180, gnn_confidence:64, completed:true },
+      { from_hub_id:'JHB', to_hub_id:'DBN', predicted_cost:680,  actual_cost:null, gnn_confidence:79, completed:false },
+      { from_hub_id:'CPT', to_hub_id:'PE',  predicted_cost:820,  actual_cost:855,  gnn_confidence:71, completed:true },
+      { from_hub_id:'DBN', to_hub_id:'PE',  predicted_cost:1240, actual_cost:1250, gnn_confidence:60, completed:true },
+    ];
+  }
+  const tbody = document.getElementById('routes-table-body');
+  tbody.innerHTML = routes.slice(0,8).map(r => `
+    <tr>
+      <td><strong>${r.from_hub_id}</strong> → ${r.to_hub_id}</td>
+      <td style="color:var(--muted)">${r.predicted_cost ? r.predicted_cost.toFixed(0) : '—'}</td>
+      <td>${r.actual_cost ? r.actual_cost.toFixed(0) : '—'}</td>
+      <td style="color:var(--purple)">${r.gnn_confidence ?? '—'}%</td>
+      <td><span class="status-pill ${r.completed?'done':'pend'}">${r.completed?'Done':'Pending'}</span></td>
+    </tr>`).join('');
+}
+
+// ── Poll loop ────────────────────────────────────────────────────────────────
+async function refresh() {
+  await Promise.all([fetchKPIs(), fetchHubs(), fetchTrend(), fetchRoutes()]);
+}
+
+refresh();
+setInterval(refresh, 15000); // refresh every 15s
+</script>
+</body>
+</html>
